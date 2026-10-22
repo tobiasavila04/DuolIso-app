@@ -39,15 +39,16 @@ export default function TeamGoalScreen() {
         </div>
       </div>
 
-      <div className="metabar-card">
-        <div className="metabar-top">
-          <b className="num">{data.logrado_total}</b>
-          <span>de {data.meta_trimestral} procedimientos a prueba de ausencias</span>
+      <div className="goal-card">
+        <div className="pring" style={{ "--pct": pct, "--ring-color": "var(--green)" }}>
+          <b>{pct}%</b>
         </div>
-        <div className="metabar-track">
-          <div className="metabar-fill" style={{ width: pct + "%" }} />
+        <div className="goal-text">
+          <div className="gt-num">
+            <b>{data.logrado_total}</b> de {data.meta_trimestral}
+          </div>
+          <p>procedimientos a prueba de ausencias, sumando entre todos los sectores este trimestre.</p>
         </div>
-        <div className="metabar-pct">{pct}% del objetivo del trimestre</div>
       </div>
 
       {data.sectores.map((s, i) => (

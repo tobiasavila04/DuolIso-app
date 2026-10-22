@@ -1,3 +1,5 @@
+import Mascot from "./Mascot";
+
 const XS = [0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1];
 const ROW_W = 260;
 const ROW_H = 100;
@@ -60,8 +62,17 @@ function Sendero({ nodos, color }) {
   );
 }
 
+function saludo() {
+  const h = new Date().getHours();
+  if (h < 12) return "Buen día";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
 export default function PathScreen({ estado, onOpenLesson, onGoMeta }) {
   const { unidades, lecciones, completadas, actual, racha, xp } = estado;
+  const leccionActual = lecciones.find((l) => l.id === actual);
+  const yaHechaHoy = leccionActual ? completadas.includes(leccionActual.id) : completadas.length === lecciones.length;
 
   // agrupa lecciones por unidad, conservando el zigzag global para que el
   // patrón de izquierda/centro/derecha no se repita siempre igual
@@ -105,6 +116,33 @@ export default function PathScreen({ estado, onOpenLesson, onGoMeta }) {
       </div>
 
       <div className="screen">
+        <div className="hero-greet">
+          <div className="hg-top">
+            <div>
+              <div className="hg-eyebrow">DuolISO · Mesa de Ayuda</div>
+              <h1>{saludo()}, equipo</h1>
+            </div>
+            <div className="hg-mascot">
+              <Mascot mood={yaHechaHoy ? "guino" : "pensando"} />
+            </div>
+          </div>
+          <p className="hg-sub">
+            {yaHechaHoy
+              ? `Ya cumpliste hoy. Llevás ${racha} día${racha === 1 ? "" : "s"} seguidos — no la cortes.`
+              : leccionActual
+              ? `Tenés 1 procedimiento esperando para hoy: "${leccionActual.o}".`
+              : "Completaste todo lo disponible. Volvé mañana por más."}
+          </p>
+          {!yaHechaHoy && leccionActual && (
+            <button className="hg-cta" onClick={() => onOpenLesson(leccionActual)}>
+              Empezar ahora
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         <div className="path">
           {grupos.map((g, gi) => (
             <div className="chain" key={"g" + gi}>

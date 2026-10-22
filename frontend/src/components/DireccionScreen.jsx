@@ -35,7 +35,9 @@ export default function DireccionScreen() {
 
       <div className="dgrid">
         <div className="dstat">
-          <b>{metaPct}%</b>
+          <div className="pring" style={{ "--pct": metaPct, "--ring-color": "var(--blue)" }}>
+            <b>{metaPct}%</b>
+          </div>
           <span>de la meta trimestral compartida</span>
         </div>
         <div className="dstat">
@@ -75,6 +77,27 @@ export default function DireccionScreen() {
               <b>{l.procedimiento}</b>
               <span>
                 {l.sector} · vía {l.como} · {l.cuando}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="evitados-card">
+        <h3>Problemas que no pasaron</h3>
+        <p className="evitados-sub">
+          Esto es lo que normalmente no se ve: {data.problemas_evitados_trimestre} situaciones este trimestre que no
+          llegaron a afectar al organismo porque el procedimiento ya estaba escrito y probado. Algunas, en concreto
+          (nunca con el nombre de la persona):
+        </p>
+        {data.problemas_evitados.map((p, i) => (
+          <div className="evitado-row" key={i}>
+            <div className="evitado-ic">⛑</div>
+            <div className="evitado-txt">
+              <b>{p.situacion}</b>
+              <span>{p.como_se_evito}</span>
+              <span className="evitado-meta">
+                {p.sector} · {p.cuando}
               </span>
             </div>
           </div>

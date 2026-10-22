@@ -123,7 +123,7 @@ export default function ProfileScreen({ estado }) {
 
       <div className="medsec">
         <h3>Medallas</h3>
-        <div className="meds">
+        <div className="meds" style={{ marginLeft: "-18px", marginRight: "-18px", paddingLeft: 18, paddingRight: 18 }}>
           {MEDALLAS.map((m) => {
             const on = m.cumple(estado, impacto, meta);
             return (
