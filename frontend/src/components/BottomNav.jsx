@@ -3,6 +3,7 @@
 const TABS = [
   { id: "camino", label: "Camino", d: "M12 3v18M12 3l-6 6M12 3l6 6M6 15l6 6 6-6" },
   { id: "meta", label: "Meta", d: "", target: true },
+  { id: "direccion", label: "Dirección", d: "M4 21V10l8-6 8 6v11M9 21v-6h6v6", briefcase: true },
   { id: "perfil", label: "Perfil", d: "M4 20c0-4 3.6-6 8-6s8 2 8 6", circle: true },
 ];
 

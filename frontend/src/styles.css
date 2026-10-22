@@ -240,3 +240,44 @@ textarea.resp:focus { border-color: var(--blue); }
 .errbox { margin: 20px; padding: 18px 20px; border-radius: 16px; background: var(--red); color: #fff;
   font-weight: 700; max-width: 480px; margin-inline: auto; text-align: center; }
 .errbox .btn3d.green { --sh: var(--green-2); }
+
+/* Tu impacto (ProfileScreen) — responde al hallazgo del TP de que el
+   beneficio de sostener el sistema son problemas que no pasaron, invisibles
+   si no se los muestra en números concretos. */
+.impacto-card { background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+  padding: 18px 20px; margin: 4px 0 18px; }
+.impacto-card h3 { font-size: 15px; font-weight: 800; }
+.impacto-sub { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 3px 0 14px; line-height: 1.4; }
+.impacto-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.impacto-item { text-align: center; background: var(--card-2); border-radius: 12px; padding: 12px 6px; }
+.impacto-item b { display: block; font-family: var(--f-dis); font-size: 19px; color: var(--green-ink); }
+.impacto-item span { display: block; font-size: 10.5px; color: var(--muted); font-weight: 700; margin-top: 4px; line-height: 1.3; }
+
+/* Panel de dirección — agregado, nunca individual: la "foto completa" que
+   el TP describe para involucrar a la alta dirección sin exigirle compromiso. */
+.dgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 0 0 16px; }
+.dstat { background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 16px; text-align: center; }
+.dstat b { display: block; font-family: var(--f-dis); font-size: 24px; color: var(--blue-2); }
+.dstat span { display: block; font-size: 11.5px; color: var(--muted); font-weight: 700; margin-top: 4px; line-height: 1.3; }
+
+.niveles-card, .logros-card { background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+  padding: 18px 20px; margin-bottom: 16px; }
+.niveles-card h3, .logros-card h3 { font-size: 15px; font-weight: 800; margin-bottom: 14px; }
+.niveles-bar { display: flex; height: 16px; border-radius: 999px; overflow: hidden; background: var(--card-2); }
+.niveles-seg { height: 100%; min-width: 2px; }
+.niveles-leyenda { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 12px; }
+.niveles-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); font-weight: 700; }
+.niveles-item i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.niveles-item b { color: var(--ink); }
+
+.logro-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.logro-row:first-of-type { border-top: none; padding-top: 0; }
+.logro-ic { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; background: var(--green-soft);
+  color: var(--green-ink); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; }
+.logro-txt { display: flex; flex-direction: column; min-width: 0; }
+.logro-txt b { font-size: 13px; }
+.logro-txt span { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+.fuego { background: var(--flame-soft); border-radius: 16px; padding: 16px 20px; margin-bottom: 20px; }
+.fuego h3 { font-size: 14px; font-weight: 800; color: var(--flame-2); }
+.fuego p { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-top: 4px; line-height: 1.4; }

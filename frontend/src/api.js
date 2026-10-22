@@ -49,6 +49,8 @@ export const api = {
   estado: () => req("/api/estado"),
   metaComun: () => req("/api/meta-comun"),
   procedimientos: () => req("/api/procedimientos"),
+  impacto: () => req("/api/impacto"),
+  direccion: () => req("/api/direccion"),
   completar: (leccionId, respuesta) => {
     const limpia = (respuesta || "").trim().slice(0, MAX_RESPUESTA);
     return req(`/api/lecciones/${leccionId}/completar`, {

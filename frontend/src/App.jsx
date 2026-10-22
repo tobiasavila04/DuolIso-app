@@ -4,6 +4,7 @@ import PathScreen from "./components/PathScreen";
 import LessonOverlay from "./components/LessonOverlay";
 import TeamGoalScreen from "./components/TeamGoalScreen";
 import ProfileScreen from "./components/ProfileScreen";
+import DireccionScreen from "./components/DireccionScreen";
 import BottomNav from "./components/BottomNav";
 import Confetti from "./components/Confetti";
 
@@ -30,6 +31,7 @@ export default function App() {
         <PathScreen estado={estado} onOpenLesson={setLeccionAbierta} onGoMeta={() => setScreen("meta")} />
       )}
       {screen === "meta" && <TeamGoalScreen />}
+      {screen === "direccion" && <DireccionScreen />}
       {screen === "perfil" && <ProfileScreen estado={estado} />}
 
       <BottomNav screen={screen} onChange={setScreen} />

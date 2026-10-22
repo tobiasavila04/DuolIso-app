@@ -153,12 +153,13 @@ LECCIONES = [
 LECCIONES_POR_ID = {l["id"]: l for l in LECCIONES}
 
 PROCEDIMIENTOS = [
-    {"n": "Alta de usuario en el dominio", "s": "Mesa de Ayuda", "a": "Leandro C.", "u": 23, "l": 5},
-    {"n": "Versionado y tag de release", "s": "Desarrollo", "a": "Ramina P.", "u": 19, "l": 5},
-    {"n": "Restauración de backup", "s": "Infraestructura", "a": "Germán P.", "u": 8, "l": 4},
-    {"n": "Pasaje a producción", "s": "Desarrollo", "a": "Ramina P.", "u": 15, "l": 4},
-    {"n": "Criterio de derivación nivel 1 a 2", "s": "Mesa de Ayuda", "a": "—", "u": 0, "l": 1},
-    {"n": "Contingencia por corte de luz", "s": "Infraestructura", "a": "—", "u": 1, "l": 2},
+    {"n": "Alta de usuario en el dominio", "s": "Mesa de Ayuda", "a": "Vos", "u": 23, "l": 5, "mio": True},
+    {"n": "Criterio de derivación nivel 1 a 2", "s": "Mesa de Ayuda", "a": "Vos", "u": 6, "l": 3, "mio": True},
+    {"n": "Reinicio de servicio OTRS", "s": "Mesa de Ayuda", "a": "Vos", "u": 4, "l": 2, "mio": True},
+    {"n": "Versionado y tag de release", "s": "Desarrollo", "a": "Ramina P.", "u": 19, "l": 5, "mio": False},
+    {"n": "Restauración de backup", "s": "Infraestructura", "a": "Germán P.", "u": 8, "l": 4, "mio": False},
+    {"n": "Pasaje a producción", "s": "Desarrollo", "a": "Ramina P.", "u": 15, "l": 4, "mio": False},
+    {"n": "Contingencia por corte de luz", "s": "Infraestructura", "a": "—", "u": 1, "l": 2, "mio": False},
 ]
 
 # Meta común entre sectores — a propósito, esto NO es un ranking. El TP es
@@ -285,6 +286,37 @@ class Procedimiento(BaseModel):
     a: str
     u: int
     l: int
+    mio: bool = False
+
+
+class Impacto(BaseModel):
+    procedimientos_tuyos: int
+    veces_usados_por_otros: int
+    horas_ahorradas_estimadas: int
+    nivel_maximo_alcanzado: int
+    racha_mas_larga: int
+
+
+class NivelConteo(BaseModel):
+    nivel: int
+    nombre: str
+    cantidad: int
+
+
+class LogroReciente(BaseModel):
+    procedimiento: str
+    sector: str
+    como: str  # "prueba de fuego" | "simulacro de ausencia"
+    cuando: str
+
+
+class Direccion(BaseModel):
+    meta_trimestral: int
+    logrado_total: int
+    participacion_hoy_pct: int
+    niveles: list[NivelConteo]
+    proxima_prueba_de_fuego: str
+    logros_recientes: list[LogroReciente]
 
 
 class SectorMeta(BaseModel):
@@ -380,6 +412,70 @@ def api_completar(request: Request, leccion_id: int, payload: CompletarPayload):
 @limiter.limit(settings.rate_limit)
 def api_procedimientos(request: Request):
     return PROCEDIMIENTOS
+
+
+@app.get("/api/impacto", response_model=Impacto)
+@limiter.limit(settings.rate_limit)
+def api_impacto(request: Request):
+    """Responde directamente al hallazgo 1 del TP: 'el beneficio son
+    problemas que no llegaron a pasar, así que no se ve'. Esta pantalla
+    existe para que esa parte invisible del trabajo de la persona se note."""
+    with db_session() as con:
+        lecciones_hechas = con.execute("SELECT COUNT(*) AS c FROM completadas").fetchone()["c"]
+        row = con.execute("SELECT racha FROM estado WHERE id = 1").fetchone()
+
+    mios = [p for p in PROCEDIMIENTOS if p.get("mio")]
+    return {
+        "procedimientos_tuyos": len(mios),
+        "veces_usados_por_otros": sum(p["u"] for p in mios),
+        # estimación de ejemplo: cada lección evitó, en promedio, que alguien
+        # perdiera media hora preguntando o reconstruyendo el paso a mano
+        "horas_ahorradas_estimadas": round(lecciones_hechas * 0.5 + sum(p["u"] for p in mios) * 0.25),
+        "nivel_maximo_alcanzado": max((p["l"] for p in mios), default=0),
+        "racha_mas_larga": max(row["racha"], 19),
+    }
+
+
+@app.get("/api/direccion", response_model=Direccion)
+@limiter.limit(settings.rate_limit)
+def api_direccion(request: Request):
+    """Panel pensado para la reunión de coordinadores: agregado, nunca por
+    persona — ni siquiera por sector con nombre y apellido. El TP es claro en
+    que esto es lo que se muestra para involucrar a la dirección 'sin exigirle
+    todavía ningún compromiso', no una herramienta de control individual."""
+    with db_session() as con:
+        row = con.execute("SELECT racha, xp FROM estado WHERE id = 1").fetchone()
+        completadas_hoy = con.execute(
+            "SELECT COUNT(*) AS c FROM completadas WHERE fecha = ?", (date.today().isoformat(),)
+        ).fetchone()["c"]
+
+    nombres_nivel = {1: "Sin escribir", 2: "Borrador", 3: "Escrito", 4: "Probado", 5: "A prueba de ausencias"}
+    conteo = {n: 0 for n in range(1, 6)}
+    for p in PROCEDIMIENTOS:
+        conteo[p["l"]] += 1
+    niveles = [{"nivel": n, "nombre": nombres_nivel[n], "cantidad": conteo[n]} for n in range(1, 6)]
+
+    logrado_total = sum(
+        s["logrado_base"] + (1 if s.get("me") and row["racha"] > 12 else 0) for s in SECTORES_META
+    )
+
+    logros_recientes = [
+        {"procedimiento": "Alta de usuario en el dominio", "sector": "Mesa de Ayuda",
+         "como": "prueba de fuego", "cuando": "hace 3 días"},
+        {"procedimiento": "Versionado y tag de release", "sector": "Desarrollo",
+         "como": "simulacro de ausencia", "cuando": "hace 1 semana"},
+        {"procedimiento": "Restauración de backup", "sector": "Infraestructura",
+         "como": "prueba de fuego", "cuando": "hace 2 semanas"},
+    ]
+
+    return {
+        "meta_trimestral": META_TRIMESTRAL,
+        "logrado_total": logrado_total,
+        "participacion_hoy_pct": min(100, round(40 + completadas_hoy * 15)),
+        "niveles": niveles,
+        "proxima_prueba_de_fuego": "jueves 30 de octubre",
+        "logros_recientes": logros_recientes,
+    }
 
 
 @app.get("/api/meta-comun", response_model=MetaComun)
