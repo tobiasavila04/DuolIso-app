@@ -1,7 +1,7 @@
 /* ======================================================================
    RACHA — estilos. Mismo lenguaje visual del prototipo, ahora como app
    React real: tokens de color claro/oscuro, botones 3D estilo Duolingo,
-   camino de lecciones, overlay de lección, liga y perfil.
+   camino de lecciones, overlay de lección, meta común y perfil.
    ====================================================================== */
 :root {
   --bg: #f7f7f7; --card: #ffffff; --card-2: #f0f0f0;
@@ -37,7 +37,14 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body, #root { height: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); line-height: 1.45; font-weight: 600; }
+body {
+  margin: 0; color: var(--ink); font-family: var(--f-body); line-height: 1.45; font-weight: 600;
+  /* fondo con textura: un punteado sutil + "manchas" de color desenfocadas,
+     como el cielo con nubes de Duolingo, sin pesar en bytes (todo CSS, nada de imágenes) */
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--line) 1.4px, transparent 1.4px);
+  background-size: 26px 26px;
+}
 h1, h2, h3 { font-family: var(--f-dis); margin: 0; text-wrap: balance; font-weight: 600; }
 button { font-family: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
@@ -52,8 +59,18 @@ button { font-family: inherit; color: inherit; }
 .btn3d.wide { width: 100%; text-align: center; }
 
 .shell { padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
-.screen { max-width: 600px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px));
+.screen { max-width: 600px; margin: 0 auto; position: relative; padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+/* manchas de color grandes y desenfocadas, fijas, detrás del contenido —
+   dan la sensación de profundidad/"mundo" que un fondo blanco liso no tiene */
+.screen::before {
+  content: ""; position: fixed; top: 54px; left: 0; right: 0; height: 420px; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(88, 204, 2, .14), transparent 42%),
+    radial-gradient(circle at 88% 12%, rgba(28, 176, 246, .14), transparent 40%),
+    radial-gradient(circle at 70% 78%, rgba(255, 200, 0, .12), transparent 45%),
+    radial-gradient(circle at 15% 85%, rgba(206, 130, 255, .12), transparent 42%);
+}
 
 .topbar { position: sticky; top: 0; z-index: 9; background: var(--bg); border-bottom: 2px solid var(--line); }
 .topin { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
@@ -61,6 +78,8 @@ button { font-family: inherit; color: inherit; }
 .chip svg { width: 25px; height: 25px; flex: none; }
 .chip.flame { color: var(--flame); }
 .chip.gem { color: var(--blue); margin-left: auto; }
+.wordmark { font-family: var(--f-dis); font-weight: 700; font-size: 17px; letter-spacing: -.2px; color: var(--ink); }
+.wordmark span { color: var(--green); }
 
 .unit { margin: 16px 0 10px; border-radius: 16px; padding: 16px 18px; display: flex; align-items: center; gap: 14px;
   color: #fff; box-shadow: 0 4px 0 rgba(0, 0, 0, .14); }
@@ -70,7 +89,17 @@ button { font-family: inherit; color: inherit; }
   display: flex; align-items: center; justify-content: center; }
 .unit .ic svg { width: 26px; height: 26px; }
 
-.path { position: relative; display: flex; flex-direction: column; align-items: center; padding-bottom: 10px; }
+.path { position: relative; display: flex; flex-direction: column; align-items: center; padding: 6px 0 24px; }
+
+/* un "tramo" = el cartel de unidad + sus nodos conectados por un sendero */
+.chain { width: 260px; }
+.chain-nodos { position: relative; width: 260px; }
+.sendero { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; }
+.node-pos { position: absolute; width: 74px; height: 74px; z-index: 1; }
+.node-pos.x--1 { left: 3px; }
+.node-pos.x-0 { left: 50%; transform: translateX(-50%); }
+.node-pos.x-1 { right: 3px; }
+
 .node-row { position: relative; width: 260px; height: 104px; display: flex; align-items: flex-start; }
 .node-row.x--1 { justify-content: flex-start; }
 .node-row.x-1 { justify-content: flex-end; }
@@ -119,6 +148,7 @@ button { font-family: inherit; color: inherit; }
 textarea.resp { font: 700 15.5px/1.5 var(--f-body); color: var(--ink); background: var(--card); border: 2px solid var(--line);
   border-radius: 14px; padding: 14px; resize: vertical; min-height: 100px; width: 100%; margin-top: 4px; }
 textarea.resp:focus { border-color: var(--blue); }
+.charcount { align-self: flex-end; font-size: 11.5px; color: var(--faint); font-weight: 700; margin-top: 4px; }
 .choices { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .choice { display: flex; align-items: center; gap: 12px; border: 2px solid var(--line); border-radius: 14px;
   padding: 14px 16px; background: var(--card); cursor: pointer; font-weight: 700; font-size: 15px; color: var(--ink); }
@@ -146,30 +176,36 @@ textarea.resp:focus { border-color: var(--blue); }
   animation: fall linear forwards; }
 @keyframes fall { to { transform: translateY(118vh) rotate(540deg); opacity: 0; } }
 
-.ligahead { display: flex; align-items: center; gap: 12px; margin: 18px 0 6px; }
+.ligahead { margin: 18px 0 14px; }
 .ligahead h2 { font-size: 20px; }
-.ligahead p { margin: 2px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.ligahead p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); font-weight: 600; line-height: 1.5; }
+
+/* Meta común: una sola barra compartida, no una tabla de posiciones */
+.metabar-card { background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 18px 20px;
+  margin-bottom: 18px; }
+.metabar-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.metabar-top b { font-family: var(--f-dis); font-size: 26px; color: var(--green-ink); }
+.metabar-top span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.metabar-track { height: 18px; background: var(--card-2); border-radius: 999px; overflow: hidden; }
+.metabar-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--blue)); border-radius: 999px;
+  transition: width .5s cubic-bezier(.3, 1, .4, 1); }
+.metabar-pct { margin-top: 8px; font-size: 11.5px; color: var(--muted); font-weight: 700; text-align: right; }
+
 .row { display: flex; align-items: center; gap: 14px; background: var(--card); border: 2px solid var(--line);
   border-radius: 14px; padding: 13px 15px; margin-bottom: 9px; }
 .row.me { border-color: var(--blue); background: var(--blue-soft); }
-.row.promo { border-left: 4px solid var(--green); }
-.row.cae { border-left: 4px solid var(--red); opacity: .85; }
-.pos { width: 26px; text-align: center; font-family: var(--f-dis); font-weight: 600; font-size: 15px; color: var(--muted); flex: none; }
-.pos.top { color: var(--gold); }
 .avatar { width: 38px; height: 38px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
   font-family: var(--f-dis); font-weight: 600; color: #fff; font-size: 15px; }
 .rowname { flex: 1; min-width: 0; }
 .rowname b { display: block; font-size: 14.5px; }
-.rowname span { font-size: 11.5px; color: var(--muted); font-weight: 600; }
-.rowxp { font-family: var(--f-dis); font-weight: 600; font-size: 15px; color: var(--ink-2); flex: none; }
-.zonelbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
-  margin: 16px 0 8px; display: flex; align-items: center; gap: 7px; }
-.zonelbl.up { color: var(--green-ink); }
-.zonelbl::before, .zonelbl::after { content: ""; width: 16px; height: 2px; background: var(--line); flex: 1; }
+.tend { font-size: 11.5px; color: var(--muted); font-weight: 700; }
+.tend-up { color: var(--green-ink); }
+.tend-down { color: var(--red); }
+.rowxp { font-family: var(--f-dis); font-weight: 600; font-size: 18px; color: var(--ink-2); flex: none; }
 .fuego { margin-top: 18px; background: var(--card); border: 2px solid var(--line); border-left: 5px solid var(--flame);
   border-radius: 14px; padding: 16px 18px; }
 .fuego h3 { font-size: 16px; margin-bottom: 5px; }
-.fuego p { margin: 0; font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.fuego p { margin: 0; font-size: 13.5px; color: var(--muted); font-weight: 600; line-height: 1.5; }
 
 .pcard { background: linear-gradient(135deg, var(--blue), var(--purple)); border-radius: 20px; padding: 22px; color: #fff;
   margin: 18px 0; box-shadow: 0 5px 0 rgba(0, 0, 0, .12); }
@@ -201,4 +237,6 @@ textarea.resp:focus { border-color: var(--blue); }
 
 .foot { max-width: 600px; margin: 0 auto; padding: 26px 0 10px; font-size: 11px; color: var(--faint); font-weight: 600; text-align: center; }
 .loading { padding: 60px 20px; text-align: center; color: var(--muted); font-weight: 700; }
-.errbox { margin: 20px; padding: 16px; border-radius: 14px; background: var(--red); color: #fff; font-weight: 700; }
+.errbox { margin: 20px; padding: 18px 20px; border-radius: 16px; background: var(--red); color: #fff;
+  font-weight: 700; max-width: 480px; margin-inline: auto; text-align: center; }
+.errbox .btn3d.green { --sh: var(--green-2); }

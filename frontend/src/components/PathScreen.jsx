@@ -1,4 +1,7 @@
 const XS = [0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1];
+const ROW_W = 260;
+const ROW_H = 100;
+const X_PX = { "-1": 40, "0": ROW_W / 2, "1": ROW_W - 40 };
 
 function NodeIcon({ state }) {
   if (state === "done")
@@ -37,23 +40,52 @@ function UnitBanner({ unidad }) {
   );
 }
 
-export default function PathScreen({ estado, onOpenLesson, onGoLiga }) {
+// El "sendero" punteado que conecta los nodos de una unidad, como el camino
+// de Duolingo. Sin esto los círculos quedan flotando sueltos y la pantalla
+// se siente vacía — con una curva suave detrás, se lee como un recorrido.
+function Sendero({ nodos, color }) {
+  const h = nodos.length * ROW_H;
+  const pts = nodos.map((n, i) => ({ x: X_PX[n.x], y: i * ROW_H + ROW_H / 2 }));
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const cur = pts[i];
+    const midY = (prev.y + cur.y) / 2;
+    d += ` C ${prev.x} ${midY}, ${cur.x} ${midY}, ${cur.x} ${cur.y}`;
+  }
+  return (
+    <svg className="sendero" viewBox={`0 0 ${ROW_W} ${h}`} width={ROW_W} height={h} aria-hidden="true">
+      <path d={d} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" strokeDasharray="1 20" opacity="0.4" />
+    </svg>
+  );
+}
+
+export default function PathScreen({ estado, onOpenLesson, onGoMeta }) {
   const { unidades, lecciones, completadas, actual, racha, xp } = estado;
+
+  // agrupa lecciones por unidad, conservando el zigzag global para que el
+  // patrón de izquierda/centro/derecha no se repita siempre igual
+  const grupos = [];
   let curUnit = null;
-  const items = [];
   lecciones.forEach((l, idx) => {
+    const x = XS[idx % XS.length];
+    const st = completadas.includes(l.id) ? "done" : l.id === actual ? "current" : "locked";
+    const nodo = { leccion: l, state: st, x };
     if (l.u !== curUnit) {
       curUnit = l.u;
-      items.push({ type: "banner", unidad: unidades[l.u], key: "b" + l.u });
+      grupos.push({ unidad: unidades[l.u], nodos: [nodo] });
+    } else {
+      grupos[grupos.length - 1].nodos.push(nodo);
     }
-    const st = completadas.includes(l.id) ? "done" : l.id === actual ? "current" : "locked";
-    items.push({ type: "node", leccion: l, state: st, x: XS[idx % XS.length], key: "n" + l.id });
   });
 
   return (
     <section>
       <div className="topbar">
         <div className="topin">
+          <div className="wordmark" aria-hidden="true">
+            Duol<span>ISO</span>
+          </div>
           <div className="chip flame">
             <svg viewBox="0 0 24 24">
               <path
@@ -74,25 +106,29 @@ export default function PathScreen({ estado, onOpenLesson, onGoLiga }) {
 
       <div className="screen">
         <div className="path">
-          {items.map((it) =>
-            it.type === "banner" ? (
-              <UnitBanner key={it.key} unidad={it.unidad} />
-            ) : (
-              <div className={`node-row x-${it.x}`} key={it.key}>
-                {it.state === "current" && <span className="startbadge">EMPEZAR</span>}
-                <button
-                  className={"node " + it.state}
-                  onClick={() => it.state !== "locked" && onOpenLesson(it.leccion)}
-                  aria-label={it.leccion.o}
-                >
-                  {it.state === "current" && <span className="ring" />}
-                  <NodeIcon state={it.state} />
-                </button>
+          {grupos.map((g, gi) => (
+            <div className="chain" key={"g" + gi}>
+              <UnitBanner unidad={g.unidad} />
+              <div className="chain-nodos" style={{ height: g.nodos.length * ROW_H }}>
+                <Sendero nodos={g.nodos} color={g.unidad.color} />
+                {g.nodos.map((n, i) => (
+                  <div className={`node-pos x-${n.x}`} style={{ top: i * ROW_H }} key={n.leccion.id}>
+                    {n.state === "current" && <span className="startbadge">EMPEZAR</span>}
+                    <button
+                      className={"node " + n.state}
+                      onClick={() => n.state !== "locked" && onOpenLesson(n.leccion)}
+                      aria-label={n.leccion.o}
+                    >
+                      {n.state === "current" && <span className="ring" />}
+                      <NodeIcon state={n.state} />
+                    </button>
+                  </div>
+                ))}
               </div>
-            )
-          )}
+            </div>
+          ))}
           <div className="node-row x-0">
-            <button className="chest" onClick={onGoLiga} aria-label="Cofre de la liga">
+            <button className="chest" onClick={onGoMeta} aria-label="Ver la meta común del trimestre">
               <svg viewBox="0 0 24 24">
                 <path d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
                 <path d="M2 7h20v3H2Zm9 3v4m-2-2h4" />

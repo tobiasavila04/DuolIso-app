@@ -1,39 +1,35 @@
-import { useEffect, useState } from "react";
-import { api } from "./api";
+import { useState } from "react";
+import { useEstado } from "./hooks/useEstado";
 import PathScreen from "./components/PathScreen";
 import LessonOverlay from "./components/LessonOverlay";
-import LeagueScreen from "./components/LeagueScreen";
+import TeamGoalScreen from "./components/TeamGoalScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import BottomNav from "./components/BottomNav";
 import Confetti from "./components/Confetti";
 
 export default function App() {
-  const [estado, setEstado] = useState(null);
-  const [error, setError] = useState("");
+  const { estado, cargando, error, recargar } = useEstado();
   const [screen, setScreen] = useState("camino");
   const [leccionAbierta, setLeccionAbierta] = useState(null);
   const [mostrarConfetti, setMostrarConfetti] = useState(false);
 
-  function cargarEstado() {
-    api.estado().then(setEstado).catch((e) => setError(e.message));
-  }
-
-  useEffect(cargarEstado, []);
-
   if (error)
     return (
       <div className="errbox">
-        No se pudo conectar con el backend ({error}). ¿Está corriendo <code>uvicorn main:app --port 8000</code>?
+        No se pudo conectar con el backend ({error}).{" "}
+        <button className="btn3d green" style={{ marginTop: 10 }} onClick={recargar}>
+          Reintentar
+        </button>
       </div>
     );
-  if (!estado) return <div className="loading">Cargando Racha…</div>;
+  if (cargando || !estado) return <div className="loading">Cargando DuolISO…</div>;
 
   return (
     <div className="shell">
       {screen === "camino" && (
-        <PathScreen estado={estado} onOpenLesson={setLeccionAbierta} onGoLiga={() => setScreen("liga")} />
+        <PathScreen estado={estado} onOpenLesson={setLeccionAbierta} onGoMeta={() => setScreen("meta")} />
       )}
-      {screen === "liga" && <LeagueScreen />}
+      {screen === "meta" && <TeamGoalScreen />}
       {screen === "perfil" && <ProfileScreen estado={estado} />}
 
       <BottomNav screen={screen} onChange={setScreen} />
@@ -44,7 +40,7 @@ export default function App() {
           onClose={() => setLeccionAbierta(null)}
           onCompleted={() => {
             setLeccionAbierta(null);
-            cargarEstado();
+            recargar();
             setMostrarConfetti(true);
           }}
         />

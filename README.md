@@ -1,13 +1,19 @@
-# Racha
+# DuolISO
 
-Prototipo del Trabajo Práctico de Design Thinking (Sistemas de Información IV,
-UNLu) — caso Defensoría del Pueblo de CABA. Una app estilo Duolingo para
-sostener, día a día, la cultura de calidad que la certificación ISO 9001 por sí
-sola no garantiza.
+Prototipo de la Idea 3 del Trabajo Práctico de Design Thinking (Sistemas de
+Información IV, UNLu) — caso Defensoría del Pueblo de CABA. Una app estilo
+Duolingo para sostener, día a día, la cultura de calidad que la certificación
+ISO 9001 por sí sola no garantiza.
 
 Stack real, no una maqueta: **React (Vite)** en el frontend y **Python
-(FastAPI + SQLite)** en el backend, con la lógica de racha, XP y liga
-corriendo de verdad en el servidor.
+(FastAPI + SQLite)** en el backend, con la lógica de racha, XP, niveles de
+procedimiento y meta común corriendo de verdad en el servidor.
+
+Importante: la pantalla "Meta" **no es un ranking**. El TP es explícito en
+este punto — en lugar de un ranking que exponga a los equipos, los sectores
+suman a un mismo objetivo trimestral y cada uno se compara únicamente contra
+su propio historial, nunca contra los demás. Así se involucra a la dirección
+sin exponer a nadie.
 
 Todos los datos (tickets, procedimientos, nombres) son de ejemplo — no son
 datos reales del organismo.
@@ -81,8 +87,8 @@ más simple:
    que compartís.
 
 Con eso cualquiera que abra el link ve la app funcionando de verdad: completa
-lecciones, suma racha y XP, y lo ve reflejado en la liga — todo corriendo
-contra el backend real, no datos simulados en el navegador.
+lecciones, suma racha y XP, y lo ve reflejado en la meta común — todo
+corriendo contra el backend real, no datos simulados en el navegador.
 
 ### Nota sobre el plan gratuito de Render
 
@@ -95,9 +101,9 @@ antes para que ya esté despierto.
 
 - **Lección diaria:** una tarea sacada de trabajo real (OTRS, Redmine, Git,
   Ansible), de texto libre o de opción, según el caso.
-- **Racha con gracia de 3 días:** no se corta el primer día que no se cumple,
-  solo si pasan más de 3 días sin ninguna lección completada
-  (`evaluar_racha` en `backend/main.py`).
+- **Racha con días comodín:** no se corta el primer día que no se cumple —
+  hay margen para urgencias y vacaciones, solo se corta si pasan más de 3
+  días sin ninguna lección completada (`evaluar_racha` en `backend/main.py`).
 - **XP acumulado** por lección, persistido en SQLite — no se pierde al
   recargar la página.
 - **Procedimientos de 5 niveles**, donde el último ("a prueba de ausencias")
@@ -105,4 +111,6 @@ antes para que ya esté despierto.
   esa validación la hace una persona de otro sector en la prueba de fuego
   mensual, a propósito, para que no se pueda hacer trampa escribiendo
   cualquier cosa.
-- **Liga semanal** entre sectores, ordenada por XP.
+- **Meta común trimestral**, no una liga: los sectores suman al mismo
+  número y cada uno se compara contra su propio trimestre anterior
+  (`/api/meta-comun` en `backend/main.py`), nunca contra los demás sectores.

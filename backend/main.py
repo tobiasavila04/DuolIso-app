@@ -1,33 +1,99 @@
 """
-Racha API — backend del prototipo de Design Thinking.
+DuolISO API — backend del prototipo "DuolISO" (idea 3 del TP de Design
+Thinking, caso Defensoría del Pueblo de CABA).
 
-Lleva la lógica real del concepto: racha diaria con gracia de 3 días,
-XP acumulado, procedimientos que suben de nivel (y el último nivel
-("a prueba de ausencias") solo se otorga a mano, nunca automáticamente,
-porque esa validación la hace una persona de otro sector, no la app),
-y una liga semanal entre sectores.
+Lleva la lógica real del concepto: racha diaria con días comodín para
+urgencias y vacaciones, XP acumulado, procedimientos que suben de nivel (y el
+último nivel, "a prueba de ausencias", solo se otorga a mano —en la prueba de
+fuego mensual o en un simulacro de ausencia—, nunca automáticamente), y el
+progreso hacia una meta trimestral COMPARTIDA entre sectores.
 
-Corre con: uvicorn main:app --reload --port 8000
+Ojo con esto último: a propósito no es un ranking. El TP es explícito en que
+DuolISO reemplaza "un ranking que exponga a los equipos" por un objetivo en
+común donde cada sector se compara contra su propio historial, nunca contra
+los demás — así se involucra a la dirección sin exponer a nadie.
+
+Corre con: python -m uvicorn main:app --reload --port 8000
 Datos de ejemplo — no son datos reales de la Defensoría del Pueblo de CABA.
+
+Decisiones de seguridad/arquitectura, explicadas porque en un TP esto
+también se defiende:
+
+- CORS restringido a una lista explícita de orígenes (nunca "*"), configurable
+  por entorno en vez de hardcodeada.
+- Toda entrada de usuario pasa por un modelo Pydantic con límites de longitud
+  y sin HTML/control characters — no porque React sea vulnerable a XSS
+  (escapa por defecto), sino porque el backend no debería confiar en que el
+  único cliente sea ese frontend.
+- Las consultas SQL son siempre parametrizadas (placeholders "?"), nunca
+  f-strings con datos del usuario — así se evita inyección SQL.
+- Las respuestas usan `response_model` de Pydantic: la API solo puede
+  devolver los campos declarados, así nunca se filtra por error algo interno.
+- Rate limiting básico por IP, para que nadie pueda hacer spam de requests.
+- Manejador de errores genérico: los errores no esperados nunca exponen el
+  traceback ni detalles internos al cliente, solo quedan en el log del
+  servidor.
+- No hay autenticación: es un prototipo de una sola persona/sector de
+  ejemplo. Si este sistema se usara con más de un sector real, el próximo
+  paso sería login (JWT o sesión) y que `sector_id` salga del usuario
+  autenticado, no de una fila fija en la base.
 """
-from datetime import date, datetime, timedelta
-from pathlib import Path
+import logging
+import re
 import sqlite3
-from typing import Optional
+from contextlib import contextmanager
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Literal, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-DB_PATH = Path(__file__).parent / "racha.db"
-app = FastAPI(title="Racha API")
+from config import get_settings
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("racha")
+
+settings = get_settings()
+DB_PATH = Path(settings.db_path)
+
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="DuolISO API", docs_url=None if settings.es_produccion else "/docs")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # prototipo: en producción, restringir al dominio del frontend
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.origins_list,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Cabeceras básicas que cualquier API debería mandar, para que el
+    navegador del cliente no haga cosas que no corresponden con la respuesta
+    (adivinar un content-type, embeberla en un iframe ajeno, etc.)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@app.exception_handler(Exception)
+async def error_inesperado(request: Request, exc: Exception):
+    """Nunca devolver un traceback al cliente: se loguea acá, server-side,
+    y al cliente le llega un mensaje genérico."""
+    log.exception("Error no manejado en %s", request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Error interno. Probá de nuevo en un momento."})
+
 
 # ---------------------------------------------------------------------------
 # datos de ejemplo (semilla) — mismas unidades/lecciones del prototipo HTML
@@ -84,6 +150,7 @@ LECCIONES = [
      "tipo": "opcion", "ops": ["Todos etiquetados y legibles", "Hay alguno que solo reconozco yo"],
      "r": "Si hay uno sin etiqueta clara, mañana te pedimos que le pongas nombre.", "cita": None},
 ]
+LECCIONES_POR_ID = {l["id"]: l for l in LECCIONES}
 
 PROCEDIMIENTOS = [
     {"n": "Alta de usuario en el dominio", "s": "Mesa de Ayuda", "a": "Leandro C.", "u": 23, "l": 5},
@@ -94,61 +161,143 @@ PROCEDIMIENTOS = [
     {"n": "Contingencia por corte de luz", "s": "Infraestructura", "a": "—", "u": 1, "l": 2},
 ]
 
-SECTORES_LIGA = [
-    {"s": "Mesa de Ayuda", "xp_base": 340, "racha_base": 12, "me": True},
-    {"s": "Desarrollo", "xp_base": 295, "racha_base": 9},
-    {"s": "Networking", "xp_base": 230, "racha_base": 12},
-    {"s": "Infraestructura", "xp_base": 180, "racha_base": 4},
-    {"s": "Depósito y Archivo", "xp_base": 95, "racha_base": 2},
+# Meta común entre sectores — a propósito, esto NO es un ranking. El TP es
+# explícito en este punto: "en lugar de un ranking que exponga a los equipos
+# [...] cada sector se compara con su propio historial". Cada sector suma al
+# mismo objetivo trimestral y se mide contra sí mismo, nunca contra los demás.
+META_TRIMESTRAL = 20  # procedimientos "a prueba de ausencias" en el trimestre, entre todos los sectores
+
+SECTORES_META = [
+    {"s": "Mesa de Ayuda", "logrado_base": 6, "trimestre_anterior": 3, "me": True},
+    {"s": "Desarrollo", "logrado_base": 5, "trimestre_anterior": 4},
+    {"s": "Infraestructura", "logrado_base": 3, "trimestre_anterior": 2},
+    {"s": "Networking", "logrado_base": 2, "trimestre_anterior": 1},
 ]
 
 # ---------------------------------------------------------------------------
 # base de datos
 # ---------------------------------------------------------------------------
-def get_db():
+@contextmanager
+def db_session():
+    """Context manager: garantiza que la conexión se cierre siempre, incluso
+    si algo tira una excepción a mitad de camino."""
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    return con
+    try:
+        yield con
+    finally:
+        con.close()
 
 
 def init_db():
-    con = get_db()
-    con.execute("""CREATE TABLE IF NOT EXISTS estado (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        racha INTEGER NOT NULL,
-        xp INTEGER NOT NULL,
-        actual INTEGER NOT NULL,
-        ultima_fecha TEXT,
-        dias_salteados INTEGER NOT NULL DEFAULT 0
-    )""")
-    con.execute("""CREATE TABLE IF NOT EXISTS completadas (
-        leccion_id INTEGER PRIMARY KEY,
-        fecha TEXT NOT NULL,
-        respuesta TEXT
-    )""")
-    row = con.execute("SELECT 1 FROM estado WHERE id = 1").fetchone()
-    if not row:
-        con.execute(
-            "INSERT INTO estado (id, racha, xp, actual, ultima_fecha, dias_salteados) VALUES (1, 12, 340, 2, ?, 0)",
-            ((date.today() - timedelta(days=1)).isoformat(),),
-        )
-        for lid in (0, 1):
+    with db_session() as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS estado (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            racha INTEGER NOT NULL,
+            xp INTEGER NOT NULL,
+            actual INTEGER NOT NULL,
+            ultima_fecha TEXT,
+            dias_salteados INTEGER NOT NULL DEFAULT 0
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS completadas (
+            leccion_id INTEGER PRIMARY KEY,
+            fecha TEXT NOT NULL,
+            respuesta TEXT
+        )""")
+        row = con.execute("SELECT 1 FROM estado WHERE id = 1").fetchone()
+        if not row:
             con.execute(
-                "INSERT OR IGNORE INTO completadas (leccion_id, fecha, respuesta) VALUES (?, ?, ?)",
-                (lid, (date.today() - timedelta(days=2)).isoformat(), "(lección de ejemplo ya completada)"),
+                "INSERT INTO estado (id, racha, xp, actual, ultima_fecha, dias_salteados) VALUES (1, 12, 340, 2, ?, 0)",
+                ((date.today() - timedelta(days=1)).isoformat(),),
             )
-        con.commit()
-    con.close()
+            for lid in (0, 1):
+                con.execute(
+                    "INSERT OR IGNORE INTO completadas (leccion_id, fecha, respuesta) VALUES (?, ?, ?)",
+                    (lid, (date.today() - timedelta(days=2)).isoformat(), "(lección de ejemplo ya completada)"),
+                )
+            con.commit()
 
 
 init_db()
 
 
 # ---------------------------------------------------------------------------
-# modelos
+# modelos — entrada validada y salida tipada (nunca se filtra un campo de más)
 # ---------------------------------------------------------------------------
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 class CompletarPayload(BaseModel):
-    respuesta: str
+    respuesta: str = Field(min_length=2, max_length=500)
+
+    @field_validator("respuesta")
+    @classmethod
+    def limpiar(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("La respuesta está vacía")
+        if _CONTROL_CHARS.search(v):
+            raise ValueError("La respuesta tiene caracteres inválidos")
+        return v
+
+
+class Unidad(BaseModel):
+    id: int
+    nombre: str
+    color: str
+    colorSh: str
+
+
+class Leccion(BaseModel):
+    id: int
+    u: int
+    o: str
+    min: int
+    xp: int
+    t: str
+    tipo: Literal["texto", "opcion"]
+    ops: Optional[list[str]] = None
+    r: str
+    cita: Optional[str] = None
+
+
+class Estado(BaseModel):
+    racha: int
+    xp: int
+    actual: int
+    completadas: list[int]
+    unidades: list[Unidad]
+    lecciones: list[Leccion]
+
+
+class ResultadoLeccion(BaseModel):
+    resultado: str
+    cita: Optional[str] = None
+    xp_ganado: int
+    racha: int
+    xp_total: int
+    ya_estaba_hecha: bool
+
+
+class Procedimiento(BaseModel):
+    n: str
+    s: str
+    a: str
+    u: int
+    l: int
+
+
+class SectorMeta(BaseModel):
+    s: str
+    logrado: int
+    trimestre_anterior: int
+    me: Optional[bool] = None
+
+
+class MetaComun(BaseModel):
+    meta_trimestral: int
+    logrado_total: int
+    sectores: list[SectorMeta]
 
 
 # ---------------------------------------------------------------------------
@@ -168,13 +317,13 @@ def evaluar_racha(con):
         con.commit()
 
 
-@app.get("/api/estado")
-def api_estado():
-    con = get_db()
-    evaluar_racha(con)
-    row = con.execute("SELECT * FROM estado WHERE id = 1").fetchone()
-    completadas = [r["leccion_id"] for r in con.execute("SELECT leccion_id FROM completadas")]
-    con.close()
+@app.get("/api/estado", response_model=Estado)
+@limiter.limit(settings.rate_limit)
+def api_estado(request: Request):
+    with db_session() as con:
+        evaluar_racha(con)
+        row = con.execute("SELECT * FROM estado WHERE id = 1").fetchone()
+        completadas = [r["leccion_id"] for r in con.execute("SELECT leccion_id FROM completadas")]
     return {
         "racha": row["racha"],
         "xp": row["xp"],
@@ -185,41 +334,38 @@ def api_estado():
     }
 
 
-@app.post("/api/lecciones/{leccion_id}/completar")
-def api_completar(leccion_id: int, payload: CompletarPayload):
-    leccion = next((l for l in LECCIONES if l["id"] == leccion_id), None)
+@app.post("/api/lecciones/{leccion_id}/completar", response_model=ResultadoLeccion)
+@limiter.limit(settings.rate_limit)
+def api_completar(request: Request, leccion_id: int, payload: CompletarPayload):
+    leccion = LECCIONES_POR_ID.get(leccion_id)
     if leccion is None:
         raise HTTPException(404, "Lección no encontrada")
-    if not payload.respuesta or len(payload.respuesta.strip()) < 2:
-        raise HTTPException(400, "La respuesta está vacía")
 
-    con = get_db()
-    ya_hecha = con.execute(
-        "SELECT 1 FROM completadas WHERE leccion_id = ?", (leccion_id,)
-    ).fetchone()
-    row = con.execute("SELECT * FROM estado WHERE id = 1").fetchone()
-    hoy = date.today()
+    with db_session() as con:
+        ya_hecha = con.execute(
+            "SELECT 1 FROM completadas WHERE leccion_id = ?", (leccion_id,)
+        ).fetchone()
+        row = con.execute("SELECT * FROM estado WHERE id = 1").fetchone()
+        hoy = date.today()
 
-    if not ya_hecha:
-        con.execute(
-            "INSERT INTO completadas (leccion_id, fecha, respuesta) VALUES (?, ?, ?)",
-            (leccion_id, hoy.isoformat(), payload.respuesta.strip()),
-        )
-        ultima = date.fromisoformat(row["ultima_fecha"]) if row["ultima_fecha"] else None
-        nueva_racha = row["racha"]
-        if ultima is None or ultima < hoy:
-            # ya pasó al menos un día desde la última lección -> suma racha
-            nueva_racha = row["racha"] + 1 if (ultima is None or (hoy - ultima).days <= 3) else 1
-        nuevo_actual = max(row["actual"], leccion_id + 1)
-        nuevo_actual = min(nuevo_actual, len(LECCIONES) - 1)
-        con.execute(
-            "UPDATE estado SET racha = ?, xp = xp + ?, actual = ?, ultima_fecha = ? WHERE id = 1",
-            (nueva_racha, leccion["xp"], nuevo_actual, hoy.isoformat()),
-        )
-        con.commit()
+        if not ya_hecha:
+            con.execute(
+                "INSERT INTO completadas (leccion_id, fecha, respuesta) VALUES (?, ?, ?)",
+                (leccion_id, hoy.isoformat(), payload.respuesta),
+            )
+            ultima = date.fromisoformat(row["ultima_fecha"]) if row["ultima_fecha"] else None
+            nueva_racha = row["racha"]
+            if ultima is None or ultima < hoy:
+                nueva_racha = row["racha"] + 1 if (ultima is None or (hoy - ultima).days <= 3) else 1
+            nuevo_actual = min(max(row["actual"], leccion_id + 1), len(LECCIONES) - 1)
+            con.execute(
+                "UPDATE estado SET racha = ?, xp = xp + ?, actual = ?, ultima_fecha = ? WHERE id = 1",
+                (nueva_racha, leccion["xp"], nuevo_actual, hoy.isoformat()),
+            )
+            con.commit()
 
-    row = con.execute("SELECT * FROM estado WHERE id = 1").fetchone()
-    con.close()
+        row = con.execute("SELECT * FROM estado WHERE id = 1").fetchone()
+
     return {
         "resultado": leccion["r"],
         "cita": leccion["cita"],
@@ -230,24 +376,35 @@ def api_completar(leccion_id: int, payload: CompletarPayload):
     }
 
 
-@app.get("/api/procedimientos")
-def api_procedimientos():
+@app.get("/api/procedimientos", response_model=list[Procedimiento])
+@limiter.limit(settings.rate_limit)
+def api_procedimientos(request: Request):
     return PROCEDIMIENTOS
 
 
-@app.get("/api/liga")
-def api_liga():
-    con = get_db()
-    row = con.execute("SELECT racha, xp FROM estado WHERE id = 1").fetchone()
-    con.close()
-    tabla = []
-    for sector in SECTORES_LIGA:
-        if sector.get("me"):
-            tabla.append({"s": sector["s"], "xp": row["xp"], "r": row["racha"], "me": True})
-        else:
-            tabla.append({"s": sector["s"], "xp": sector["xp_base"], "r": sector["racha_base"]})
-    tabla.sort(key=lambda s: -s["xp"])
-    return tabla
+@app.get("/api/meta-comun", response_model=MetaComun)
+@limiter.limit(settings.rate_limit)
+def api_meta_comun(request: Request):
+    """Progreso del objetivo trimestral compartido. A propósito, el orden de
+    la lista es siempre el mismo (no se reordena por quién va "ganando"):
+    acá no hay primeros ni últimos, cada sector se mide contra su propio
+    trimestre anterior, nunca contra los demás."""
+    with db_session() as con:
+        completadas_en_nivel_5 = con.execute(
+            "SELECT COUNT(*) AS c FROM completadas"
+        ).fetchone()["c"]
+    sectores = []
+    logrado_total = 0
+    for sector in SECTORES_META:
+        logrado = sector["logrado_base"] + (completadas_en_nivel_5 if sector.get("me") else 0)
+        logrado_total += logrado
+        sectores.append({
+            "s": sector["s"],
+            "logrado": logrado,
+            "trimestre_anterior": sector["trimestre_anterior"],
+            "me": sector.get("me"),
+        })
+    return {"meta_trimestral": META_TRIMESTRAL, "logrado_total": logrado_total, "sectores": sectores}
 
 
 @app.get("/api/salud")

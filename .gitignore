@@ -3,4 +3,6 @@ dist/
 __pycache__/
 *.pyc
 backend/racha.db
+backend/.env
 .env
+.env.local

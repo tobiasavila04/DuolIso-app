@@ -50,7 +50,7 @@ export default function ProfileScreen({ estado }) {
               <circle cx="12" cy="12" r="10" fill="#afafaf" />
               <path d="M7 15l3-6 2 3 2-4 3 7" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <b>1° en la liga</b>
+            <b>Meta trimestral cumplida</b>
           </div>
         </div>
       </div>

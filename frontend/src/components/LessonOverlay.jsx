@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Mascot from "./Mascot";
-import { api } from "../api";
+import { api, MAX_RESPUESTA } from "../api";
 
 export default function LessonOverlay({ leccion, onClose, onCompleted }) {
   const [step, setStep] = useState(0);
@@ -55,12 +55,18 @@ export default function LessonOverlay({ leccion, onClose, onCompleted }) {
               <div className="bubble">{leccion.t}</div>
             </div>
             {leccion.tipo === "texto" ? (
-              <textarea
-                className="resp"
-                placeholder="Escribilo como se lo contarías a un compañero."
-                value={resp}
-                onChange={(e) => setResp(e.target.value)}
-              />
+              <>
+                <textarea
+                  className="resp"
+                  placeholder="Escribilo como se lo contarías a un compañero."
+                  value={resp}
+                  maxLength={MAX_RESPUESTA}
+                  onChange={(e) => setResp(e.target.value)}
+                />
+                <div className="charcount">
+                  {resp.trim().length}/{MAX_RESPUESTA}
+                </div>
+              </>
             ) : (
               <div className="choices">
                 {leccion.ops.map((o, i) => (
